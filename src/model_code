@@ -1,0 +1,83 @@
+# Fingerprint Recognition using ORB + SVM with Image Output
+
+import os
+import numpy as np
+import cv2
+import joblib
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+
+# Preprocess function
+def preprocess_image(image_path):
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.resize(img, (224, 224))
+    blur = cv2.GaussianBlur(img, (3, 3), 0)
+    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return thresh
+
+# Feature Extraction
+def extract_features(folder_path):
+    orb = cv2.ORB_create()
+    X, y = [], []
+
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".tif"):
+            full_path = os.path.join(folder_path, filename)
+            image = preprocess_image(full_path)
+            keypoints, descriptors = orb.detectAndCompute(image, None)
+
+            if descriptors is not None:
+                feature = descriptors.mean(axis=0)
+                X.append(feature)
+                label = int(filename.split("_")[0])  # e.g., 104_6.tif -> label 104
+                y.append(label)
+
+    return np.array(X), np.array(y)
+
+# Define dataset path (your folder path)
+dataset_path = r"C:\\Users\\sivar\\Downloads\\DB4_B"
+
+# Extract features and labels
+X, y = extract_features(dataset_path)
+
+# Split dataset
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train the SVM model
+model = SVC(kernel='linear')
+model.fit(X_train, y_train)
+
+# Evaluate the model
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("\n Model Accuracy:", accuracy)
+
+# Save the model
+joblib.dump(model, "fingerprint_svm_model.joblib")
+print(" Model saved as 'fingerprint_svm_model.joblib'")
+
+# Predict function with image display
+def predict_image(image_path):
+    orb = cv2.ORB_create()
+    model = joblib.load("fingerprint_svm_model.joblib")
+    image = preprocess_image(image_path)
+    keypoints, descriptors = orb.detectAndCompute(image, None)
+
+    # Display the fingerprint image
+    plt.figure(figsize=(4, 4))
+    plt.imshow(image, cmap='gray')
+    plt.title("Fingerprint Image")
+    plt.axis('off')
+    plt.show()
+
+    if descriptors is not None:
+        feature = descriptors.mean(axis=0).reshape(1, -1)
+        prediction = model.predict(feature)
+        print("\n Predicted Fingerprint ID:", prediction[0])
+    else:
+        print("\n No fingerprint features found.")
+
+# Example usage - change this image to any .tif in your dataset
+predict_image(r"C:\Users\sivar\Downloads\DB4_B\108_1.tif")
